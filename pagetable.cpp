@@ -40,6 +40,12 @@ struct Map
 {
     bool valid;
     int frame;
+
+    Map(bool m_valid, int m_frame)
+    {
+        valid = m_valid;
+        frame = m_frame;
+    }
 };
 
 unsigned int logicalToPage(unsigned int logicalAddress, unsigned int mask, unsigned int shift)
@@ -54,33 +60,52 @@ unsigned int logicalToPage(unsigned int logicalAddress, unsigned int mask, unsig
 
 Map *pageLookup(PageTable *pageTable, unsigned int logicalAddress)
 {
-    Map *map;
+    int leafDepth = (pageTable->levelCount) - 1;
+    int pageNumber;
 
-    return map;
+    Level *currLevel = (Level *)pageTable->rootNodePtr;
+    for (int depth = 0; depth < leafDepth; depth++)
+    {
+        pageNumber = logicalToPage(logicalAddress, pageTable->bitMaskAry[depth], pageTable->shiftAry[depth]);
+
+        if (currLevel->nextLevelPtr[pageNumber] == NULL)
+        {
+            return NULL;
+        }
+
+        currLevel = (Level *)currLevel->nextLevelPtr[pageNumber];
+    }
+
+    pageNumber = logicalToPage(logicalAddress, pageTable->bitMaskAry[leafDepth], pageTable->shiftAry[leafDepth]);
+    Map *map = (Map *)currLevel->nextLevelPtr[pageNumber];
+
+    // if the map is valid return it, otherwise return NULL
+    return (map->valid) ? map : NULL;
 }
 
 void pageInsert(PageTable *pageTable, unsigned int logicalAddress, unsigned int frame)
 {
-    Level *currLevel = (Level *)pageTable->rootNodePtr;
+    pageInsert((Level *)pageTable->rootNodePtr, logicalAddress, frame);
+}
 
-    for (int level = 0; level < pageTable->levelCount - 1; level++)
+void pageInsert(Level *currLevel, unsigned int logicalAddress, unsigned int frame)
+{
+    PageTable *pageTable = (PageTable *)currLevel->pageTablePtr;
+    int depth = currLevel->depth;
+    int bitMask = pageTable->bitMaskAry[depth];
+    int shift = pageTable->shiftAry[depth];
+
+    int pageNumber = logicalToPage(logicalAddress, bitMask, shift);
+
+    //This level is leaf Node
+    int leafDepth = (pageTable->levelCount) - 1;
+    if (depth == leafDepth)
     {
-        int pageNumber = logicalToPage(logicalAddress, pageTable->bitMaskAry[level], pageTable->shiftAry[level]);
-
-        if (currLevel->nextLevelPtr[pageNumber] == NULL)
-        {
-            int size = pageTable->entryCount[level + 1] - 1;
-            Level **levelList = new Level *[size];
-
-            for (int idx = 0; idx < size; idx++)
-            {
-                levelList[idx] == NULL;
-            }
-
-            currLevel->nextLevelPtr[pageNumber] = new Level((void *)pageTable, level + 1, (void **)levelList);
-        }
-
-        currLevel = (Level *)currLevel->nextLevelPtr[pageNumber];
+        Map *map = (Map *)currLevel->nextLevelPtr;
+        map = new Map(true, frame);
+    }
+    else
+    {
     }
 }
 
