@@ -1,16 +1,18 @@
 #include <iostream>
 #include <unistd.h>
 #include <cmath>
+#include <stdlib.h>
+#include <string.h>
 
 struct PageTable
 {
-    Level *rootNodePtr;
+    void *rootNodePtr;
     int levelCount;
     int *bitMaskAry;
     int *shiftAry;
     int *entryCount;
 
-    PageTable(Level *m_rootNodePtr, int m_levelCount, int *m_bitMaskAry, int *m_shiftAry, int *m_entryCount)
+    PageTable(void *m_rootNodePtr, int m_levelCount, int *m_bitMaskAry, int *m_shiftAry, int *m_entryCount)
     {
         rootNodePtr = m_rootNodePtr;
         levelCount = m_levelCount;
@@ -22,11 +24,11 @@ struct PageTable
 
 struct Level
 {
-    PageTable *pageTablePtr;
+    void *pageTablePtr;
     int depth;
-    void *nextLevelPtr;
+    void **nextLevelPtr;
 
-    Level(PageTable *m_pageTablePtr, int m_depth, void *m_nextLevelPtr)
+    Level(void *m_pageTablePtr, int m_depth, void **m_nextLevelPtr)
     {
         pageTablePtr = m_pageTablePtr;
         depth = m_depth;
@@ -36,40 +38,73 @@ struct Level
 
 struct Map
 {
-    int *virtualPage;
-    int *physicalFrame;
+    bool valid;
+    int frame;
 };
 
 unsigned int logicalToPage(unsigned int logicalAddress, unsigned int mask, unsigned int shift)
 {
-    unsigned int pageTable;
+    unsigned int pageNumber;
 
-    pageTable = logicalAddress & mask;
-    pageTable = pageTable >> shift;
+    pageNumber = logicalAddress & mask;
+    pageNumber = pageNumber >> shift;
 
-    return pageTable;
+    return pageNumber;
 }
 
-Map *pageLookup(PageTable *pageTable, unsigned int LogicalAddress)
+Map *pageLookup(PageTable *pageTable, unsigned int logicalAddress)
 {
     Map *map;
 
     return map;
 }
 
-void pageInsert(PageTable *pageTable, unsigned int LogicalAddress, unsigned int frame)
+void pageInsert(PageTable *pageTable, unsigned int logicalAddress, unsigned int frame)
 {
+    Level *currLevel = (Level *)pageTable->rootNodePtr;
+
+    for (int level = 0; level < pageTable->levelCount - 1; level++)
+    {
+        int pageNumber = logicalToPage(logicalAddress, pageTable->bitMaskAry[level], pageTable->shiftAry[level]);
+
+        if (currLevel->nextLevelPtr[pageNumber] == NULL)
+        {
+            int size = pageTable->entryCount[level + 1] - 1;
+            Level **levelList = new Level *[size];
+
+            for (int idx = 0; idx < size; idx++)
+            {
+                levelList[idx] == NULL;
+            }
+
+            currLevel->nextLevelPtr[pageNumber] = new Level((void *)pageTable, level + 1, (void **)levelList);
+        }
+
+        currLevel = (Level *)currLevel->nextLevelPtr[pageNumber];
+    }
 }
 
 int main(int argc, char **argv)
 {
-    int option;
-    int idx;
-    int numberOfAddresses;
+    // declare starting structs
+    PageTable *pageTable;
+    Level *firstLevel;
+
+    // if -n flag called, says how many addresses to load
+    int numberOfAddresses = -1;
+
+    // if -o flag called, gets char*
     char *mode;
+
+    // file where we read the addresses from
     char *traceFile;
+
+    // when page exists hitCounter increments, otherwise missCounter increments
     int hitCounter;
     int missCounter;
+
+    //variable for getopt
+    int option;
 
     // arguments with flags infront
     while ((option = getopt(argc, argv, "n:o:")) != -1)
@@ -78,28 +113,44 @@ int main(int argc, char **argv)
         {
         case 'n':
             numberOfAddresses = atoi(optarg);
+            std::cout << numberOfAddresses;
             break;
         case 'o':
-            /*
-        	*mode = optarg;
-            if ()
-            if ()
-            if ()
-            if ()
-            if ()
-        */
+            mode = optarg;
+
+            if (strcmp(mode, "bitmasks") == 0)
+            {
+                std::cout << "bitmasks";
+            }
+            if (strcmp(mode, "logical2physical") == 0)
+            {
+                std::cout << "logical2physical";
+            }
+            if (strcmp(mode, "page2frame") == 0)
+            {
+                std::cout << "page2frame";
+            }
+            if (strcmp(mode, "offset") == 0)
+            {
+                std::cout << "offset";
+            }
+            if (strcmp(mode, "summary") == 0)
+            {
+                std::cout << "summary";
+            }
+
             break;
         default:
-            // do something with this later
+            std::cout << "This flag doesn't exist";
         }
     }
 
-    idx = optind;
+    int idx = optind;
     traceFile = argv[idx];
 
     int addressBits = 32;
     int levelCount = argc - (optind + 1);
-    PageTable pageTable(NULL, levelCount, new int[levelCount], new int[levelCount], new int[levelCount]);
+    pageTable = new PageTable((void *)firstLevel, levelCount, new int[levelCount], new int[levelCount], new int[levelCount]);
 
     int level = 0;
     // all arguments following flagged inputs
@@ -107,14 +158,21 @@ int main(int argc, char **argv)
     {
         int bits = atoi(argv[idx]);
         addressBits -= bits;
-        pageTable.shiftAry[level] = addressBits;
-        pageTable.entryCount[level] = pow(2, bits);
-        pageTable.bitMaskAry[level] = (pageTable.entryCount[level] - 1) << pageTable.shiftAry[level];
+        pageTable->shiftAry[level] = addressBits;
+        pageTable->entryCount[level] = pow(2, bits);
+        pageTable->bitMaskAry[level] = (pageTable->entryCount[level] - 1) << pageTable->shiftAry[level];
 
         level++;
     }
 
     //Level
-    Level firstLevel(&pageTable, 0, new Level *[pageTable.entryCount[0] - 1]);
-    pageTable.rootNodePtr = &firstLevel;
+    int levelSize = pageTable->entryCount[0] - 1;
+    Level **levelList = new Level *[levelSize];
+
+    for (int i = 0; i < levelSize; i++)
+    {
+        levelList[i] = NULL;
+    }
+
+    firstLevel = new Level((void *)pageTable, 0, (void **)levelList);
 }
