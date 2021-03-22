@@ -11,7 +11,7 @@
             "program": "${fileDirname}\\${fileBasenameNoExtension}.exe",
             "args": [
                 "-o",
-                "page2frame",
+                "logical2physical",
                 "filename.txt",
                 "4",
                 "4",

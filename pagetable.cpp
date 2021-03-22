@@ -26,6 +26,12 @@ struct Map
 {
     bool valid;
     int frame;
+
+    Map(bool m_valid, int m_frame)
+    {
+        valid = m_valid;
+        frame = m_frame;
+    }
 };
 
 unsigned int logicalToPage(unsigned int logicalAddress, unsigned int mask, unsigned int shift)
@@ -66,12 +72,12 @@ Map *pageLookup(PageTable *pageTable, unsigned int logicalAddress)
 
 Level **makeLevelList(PageTable *pageTable, int depth)
 {
-    int size = (pageTable->entryCount[depth]) - 1;
+    int size = pageTable->entryCount[depth];
     Level **nextLevelPtr = new Level *[size];
 
     for (int idx = 0; idx < size; idx++)
     {
-        nextLevelPtr[idx] == NULL;
+        nextLevelPtr[idx] = NULL;
     }
 
     return nextLevelPtr;
@@ -79,7 +85,7 @@ Level **makeLevelList(PageTable *pageTable, int depth)
 
 Map **makeMapList(PageTable *pageTable, int depth)
 {
-    int size = (pageTable->entryCount[depth]) - 1;
+    int size = pageTable->entryCount[depth];
     Map **mapPtr = new Map *[size];
 
     for (int idx = 0; idx < size; idx++)
@@ -110,11 +116,21 @@ void pageInsert(Level *currLevel, unsigned int logicalAddress, unsigned int fram
     }
     else
     {
-        void **nextPtr = (depth + 1 == leafDepth) ? (void **)makeMapList(pageTable, depth + 1) : (void **)makeLevelList(pageTable, depth + 1);
+        Level *newLevel = new Level;
+        newLevel->pageTablePtr = pageTable;
+        newLevel->depth = depth + 1;
 
-        Level *newLevel = new Level(pageTable, depth + 1, nextPtr);
+        if (currLevel->nextPtr[pageNumber] == NULL)
+        {
+            newLevel->nextPtr = (depth + 1 == leafDepth) ? (void **)makeMapList(pageTable, depth + 1) : (void **)makeLevelList(pageTable, depth + 1);
+        }
 
-        currLevel->nextPtr[pageNumber] = (void *)newLevel;
+        else
+        {
+            newLevel->nextPtr = ((Level *)(currLevel->nextPtr[pageNumber]))->nextPtr;
+        }
+
+        currLevel->nextPtr[pageNumber] = newLevel;
         pageInsert(newLevel, logicalAddress, frame);
     }
 }
@@ -177,6 +193,9 @@ int main(int argc, char **argv)
     }
 
     //Level
+    Level **levelList = makeLevelList(&pageTable, 0);
+
+    /*
     int levelSize = pageTable.entryCount[0] - 1;
     Level **levelList = new Level *[levelSize];
 
@@ -184,12 +203,14 @@ int main(int argc, char **argv)
     {
         levelList[i] = NULL;
     }
+    */
 
     firstLevel.pageTablePtr = &pageTable;
     firstLevel.depth = 0;
     firstLevel.nextPtr = (void **)levelList;
 
     unsigned int offsetMask = pow(2, addressBits) - 1;
+    int frameShift = addressBits;
 
     unsigned int addresses[20] = {
         0x0041F760,
@@ -213,55 +234,65 @@ int main(int argc, char **argv)
         0x0044E620,
         0x1D496620};
 
+    // (Level *)(((Level *)((Level *) firstLevel->nextPtr[1]))->nextPtr[1055])
+
+    int frame = 0;
+    for (int i = 0; i < 20; i++)
+    {
+        if (pageLookup(&pageTable, addresses[i]) == NULL)
+        {
+            pageInsert(&pageTable, addresses[i], frame);
+            frame++;
+        }
+    }
+
+    // done
     if (strcmp(mode, "bitmasks") == 0)
     {
         report_bitmasks(pageTable.levelCount, pageTable.bitMaskAry);
     }
 
+    // just need insertPage method to work to get frames
     if (strcmp(mode, "logical2physical") == 0)
     {
-        int frame = 0;
-
         for (int i = 0; i < 20; i++)
         {
-            Map *map;
-
-            if ((map = pageLookup(&pageTable, addresses[i])) == NULL)
-            {
-                pageInsert((Level *)pageTable.rootNodePtr, addresses[i], frame);
-                report_logical2physical(addresses[i], frame);
-                frame++;
-            }
-
-            else
-            {
-                report_logical2physical(addresses[i], map->frame);
-            }
+            frame = pageLookup(&pageTable, addresses[i])->frame;
+            int physicalAddress = (frame << frameShift) | (addresses[i] & offsetMask);
+            report_logical2physical(addresses[i], physicalAddress);
         }
     }
+
+    // done
     if (strcmp(mode, "page2frame") == 0)
     {
+        unsigned int page[pageTable.levelCount];
+
         for (int idx = 0; idx < 20; idx++)
         {
-            unsigned int *page = new unsigned int[pageTable.levelCount];
-
             for (int i = 0; i < pageTable.levelCount; i++)
             {
-                page[i] = logicalToPage(addresses[i], pageTable.bitMaskAry[i], pageTable.shiftAry[i]);
+                page[i] = logicalToPage(addresses[idx], pageTable.bitMaskAry[i], pageTable.shiftAry[i]);
             }
 
-            report_pagemap(addresses[idx], pageTable.levelCount, page, idx);
+            frame = pageLookup(&pageTable, addresses[idx])->frame;
+
+            report_pagemap(addresses[idx], pageTable.levelCount, page, frame);
         }
     }
+
+    // done
     if (strcmp(mode, "offset") == 0)
     {
         for (int i = 0; i < 20; i++)
         {
-            report_logical2offset(addresses[i], offsetMask);
+            int offset = offsetMask & addresses[i];
+            report_logical2offset(addresses[i], offset);
         }
     }
+
+    // have to do later
     if (strcmp(mode, "summary") == 0)
     {
-        std::cout << "summary";
     }
 }

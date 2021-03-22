@@ -23,7 +23,7 @@
 /* C includes */
 #include <inttypes.h>
 #include <stdbool.h>
-#endif 
+#endif
 
 /*
  * structure that can be used to maintain which output types are enabled.
@@ -32,12 +32,13 @@
  * If compiled with a C compiler, make sure that the C99 dialect or later is used.
  * (-std=c99 with a GNU C compiler)
  */
-typedef struct {
-  bool bitmasks;  /* display bitmaks */
-  bool logical2physical;  /* show logical to physical address translation */
-  bool page2frame;  /* show mapping between page numbers and frame */
-  bool offset; /* show the offset of each address */
-  bool summary; /* summary statistics */
+typedef struct
+{
+  bool bitmasks;         /* display bitmaks */
+  bool logical2physical; /* show logical to physical address translation */
+  bool page2frame;       /* show mapping between page numbers and frame */
+  bool offset;           /* show the offset of each address */
+  bool summary;          /* summary statistics */
 } OutputOptionsType;
 
 /*
@@ -64,9 +65,9 @@ void report_logical2offset(uint32_t logical, uint32_t offset);
  * bytes - Total number of bytes needed for data structure.  
  *	   Should include all levels, allocated arrays, etc.
  */
-void report_summary(unsigned int page_size, unsigned int hits, 
-		    unsigned int addresses, unsigned int frames_used,
-		    unsigned int bytes);
+void report_summary(unsigned int page_size, unsigned int hits,
+                    unsigned int addresses, unsigned int frames_used,
+                    unsigned int bytes);
 
 /*
  * report_bitmasks
@@ -87,7 +88,7 @@ void report_bitmasks(int levels, uint32_t *masks);
  *         (0 < idx < levels)
  * frame - page is mapped to specified frame
  */
-void report_pagemap(uint32_t logical_addr, int levels, 
-		    uint32_t *pages, uint32_t frame);
+void report_pagemap(uint32_t logical_addr, int levels,
+                    uint32_t *pages, uint32_t frame);
 
 #endif
