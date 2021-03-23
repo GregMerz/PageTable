@@ -1,10 +1,19 @@
+// makefile, verify bytes implemented, test code in gradescope, output file, organize methods, comment, pair affidavid
+
 #include <iostream>
 #include <unistd.h>
 #include <cmath>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <fstream>
+#include <vector>
 #include "output_mode_helpers.h"
+#include "byutr.h"
+
+#define OOPS 5
+
+using namespace std;
 
 struct PageTable
 {
@@ -13,6 +22,7 @@ struct PageTable
     unsigned int *bitMaskAry;
     int *shiftAry;
     int *entryCount;
+    unsigned int bytesImplemented;
 };
 
 struct Level
@@ -74,6 +84,7 @@ Level **makeLevelList(PageTable *pageTable, int depth)
 {
     int size = pageTable->entryCount[depth];
     Level **nextLevelPtr = new Level *[size];
+    pageTable->bytesImplemented += sizeof(Level **);
 
     for (int idx = 0; idx < size; idx++)
     {
@@ -87,6 +98,7 @@ Map **makeMapList(PageTable *pageTable, int depth)
 {
     int size = pageTable->entryCount[depth];
     Map **mapPtr = new Map *[size];
+    pageTable->bytesImplemented += sizeof(Map **) + (size * sizeof(Map *));
 
     for (int idx = 0; idx < size; idx++)
     {
@@ -119,6 +131,7 @@ void pageInsert(Level *currLevel, unsigned int logicalAddress, unsigned int fram
         Level *newLevel = new Level;
         newLevel->pageTablePtr = pageTable;
         newLevel->depth = depth + 1;
+        pageTable->bytesImplemented += sizeof(Level *);
 
         if (currLevel->nextPtr[pageNumber] == NULL)
         {
@@ -148,7 +161,7 @@ int main(int argc, char **argv)
 
     //variables for getopt
     int option;
-    OutputOptionsType outputType;
+    //  OutputOptionsType outputType;
     char *mode;
     int numberOfAddresses = -1;
 
@@ -164,7 +177,7 @@ int main(int argc, char **argv)
             mode = optarg;
             break;
         default:
-            std::cout << "This flag doesn't exist";
+            break;
         }
     }
 
@@ -179,6 +192,7 @@ int main(int argc, char **argv)
     pageTable.bitMaskAry = new unsigned int[levelCount];
     pageTable.shiftAry = new int[levelCount];
     pageTable.entryCount = new int[levelCount];
+    pageTable.bytesImplemented = sizeof(PageTable);
 
     int level = 0;
     for (idx = optind + 1; idx < argc; idx++)
@@ -193,56 +207,82 @@ int main(int argc, char **argv)
     }
 
     //Level
-    Level **levelList = makeLevelList(&pageTable, 0);
-
-    /*
-    int levelSize = pageTable.entryCount[0] - 1;
-    Level **levelList = new Level *[levelSize];
-
-    for (int i = 0; i < levelSize; i++)
-    {
-        levelList[i] = NULL;
-    }
-    */
+    void **levelList = (pageTable.levelCount - 1 == 0) ? (void **)makeMapList(&pageTable, 0) : (void **)makeLevelList(&pageTable, 0);
 
     firstLevel.pageTablePtr = &pageTable;
     firstLevel.depth = 0;
     firstLevel.nextPtr = (void **)levelList;
+    pageTable.bytesImplemented += sizeof(Level);
 
     unsigned int offsetMask = pow(2, addressBits) - 1;
     int frameShift = addressBits;
 
-    unsigned int addresses[20] = {
-        0x0041F760,
-        0x0041F780,
-        0x0041F740,
-        0x11F5E2C0,
-        0x05E78900,
-        0x13270900,
-        0x004758A0,
-        0x004A30A0,
-        0x0049E110,
-        0x0049E160,
-        0x0044E4F8,
-        0x0044E500,
-        0x0744E520,
-        0x0044E5A0,
-        0x388A65A0,
-        0x0744EDD0,
-        0x0044E5E0,
-        0x0703FF10,
-        0x0044E620,
-        0x1D496620};
+    vector<int> addresses;
 
-    // (Level *)(((Level *)((Level *) firstLevel->nextPtr[1]))->nextPtr[1055])
-
+    FILE *fp = fopen("trace.sample.tr", "r");
     int frame = 0;
-    for (int i = 0; i < 20; i++)
+    int hits = 0;
+
+    if (fp == NULL)
     {
-        if (pageLookup(&pageTable, addresses[i]) == NULL)
+        printf("uh oh\n");
+        exit(OOPS);
+    }
+
+    /* Start reading addresses */
+    p2AddrTr trace_item; /* Structure with trace information */
+    bool done = false;
+
+    if (numberOfAddresses == -1)
+    {
+        while (!done)
         {
-            pageInsert(&pageTable, addresses[i], frame);
-            frame++;
+            // Grabe the next address
+            int bytesread = NextAddress(fp, &trace_item);
+            // Check if we actually got something
+            done = bytesread == 0;
+            if (!done)
+            {
+                addresses.push_back(trace_item.addr);
+                //printf("Address %x, AddressesIdx: %i\n", trace_item.addr, addressesRead);
+                if (pageLookup(&pageTable, trace_item.addr) == NULL)
+                {
+                    pageInsert(&pageTable, trace_item.addr, frame);
+                    frame++;
+                }
+                else
+                {
+                    hits++;
+                }
+            }
+        }
+    }
+
+    else
+    {
+        int addressesRead = 0;
+
+        while (addressesRead < numberOfAddresses && !done)
+        {
+            // Grabe the next address
+            int bytesread = NextAddress(fp, &trace_item);
+            // Check if we actually got something
+            done = bytesread == 0;
+            if (!done)
+            {
+                addressesRead++;
+                addresses.push_back(trace_item.addr);
+                //printf("Address %x, AddressesIdx: %i\n", trace_item.addr, addressesRead);
+                if (pageLookup(&pageTable, trace_item.addr) == NULL)
+                {
+                    pageInsert(&pageTable, trace_item.addr, frame);
+                    frame++;
+                }
+                else
+                {
+                    hits++;
+                }
+            }
         }
     }
 
@@ -252,14 +292,14 @@ int main(int argc, char **argv)
         report_bitmasks(pageTable.levelCount, pageTable.bitMaskAry);
     }
 
-    // just need insertPage method to work to get frames
+    // done
     if (strcmp(mode, "logical2physical") == 0)
     {
-        for (int i = 0; i < 20; i++)
+        for (int i = 0; i < addresses.size(); i++)
         {
-            frame = pageLookup(&pageTable, addresses[i])->frame;
-            int physicalAddress = (frame << frameShift) | (addresses[i] & offsetMask);
-            report_logical2physical(addresses[i], physicalAddress);
+            frame = pageLookup(&pageTable, addresses.at(i))->frame;
+            int physicalAddress = (frame << frameShift) | (addresses.at(i) & offsetMask);
+            report_logical2physical(addresses.at(i), physicalAddress);
         }
     }
 
@@ -268,31 +308,33 @@ int main(int argc, char **argv)
     {
         unsigned int page[pageTable.levelCount];
 
-        for (int idx = 0; idx < 20; idx++)
+        for (int idx = 0; idx < addresses.size(); idx++)
         {
             for (int i = 0; i < pageTable.levelCount; i++)
             {
-                page[i] = logicalToPage(addresses[idx], pageTable.bitMaskAry[i], pageTable.shiftAry[i]);
+                page[i] = logicalToPage(addresses.at(idx), pageTable.bitMaskAry[i], pageTable.shiftAry[i]);
             }
 
-            frame = pageLookup(&pageTable, addresses[idx])->frame;
+            frame = pageLookup(&pageTable, addresses.at(idx))->frame;
 
-            report_pagemap(addresses[idx], pageTable.levelCount, page, frame);
+            report_pagemap(addresses.at(idx), pageTable.levelCount, page, frame);
         }
     }
 
     // done
     if (strcmp(mode, "offset") == 0)
     {
-        for (int i = 0; i < 20; i++)
+        for (int i = 0; i < addresses.size(); i++)
         {
-            int offset = offsetMask & addresses[i];
-            report_logical2offset(addresses[i], offset);
+            int offset = offsetMask & addresses.at(i);
+            report_logical2offset(addresses.at(i), offset);
         }
     }
 
     // have to do later
     if (strcmp(mode, "summary") == 0)
     {
+        //bytes = 8,388,680
+        report_summary(trace_item.size, hits, addresses.size(), frame, pageTable.bytesImplemented);
     }
 }
